@@ -9,7 +9,7 @@ const SERVICE_ACCOUNT = JSON.parse(
     "base64"
   ).toString("utf8")
 );
-);const app = express();
+const app = express();
 app.use(express.json());
 
 const TOKEN = process.env.LINE_CHANNEL_ACCESS_TOKEN;
