@@ -4,7 +4,8 @@ const { google } = require("googleapis");
 
 const SHEET_ID = process.env.GOOGLE_SHEET_ID;
 const SERVICE_ACCOUNT = JSON.parse(
-  process.env.GOOGLE_SERVICE_ACCOUNT_JSON.replace(/\\n/g, '\n')
+  Buffer.from(process.env.GOOGLE_SERVICE_ACCOUNT_JSON_BASE64, "base64").toString("utf8")
+);
 );const app = express();
 app.use(express.json());
 
