@@ -287,28 +287,29 @@ async function saveLeaveToSheet({ userId, name, type, date, duration, reason }) 
     scopes: ["https://www.googleapis.com/auth/spreadsheets"]
   });
 
-  const sheets = google.sheets({ version: "v4", auth });
+ const leaveId = `LV-${Date.now()}`;
 
-  await sheets.spreadsheets.values.append({
-    spreadsheetId: SHEET_ID,
-    range: "A:J",
-    valueInputOption: "USER_ENTERED",
-    requestBody: {
-      values: [[
-        `LV-${Date.now()}`,
-        userId,
-        name,
-        type,
-        date,
-        duration,
-        reason,
-        "pending",
-        "",
-        new Date().toISOString()
-      ]]
-    }
-  });
-}
+await sheets.spreadsheets.values.append({
+  spreadsheetId: SHEET_ID,
+  range: "A:J",
+  valueInputOption: "USER_ENTERED",
+  requestBody: {
+    values: [[
+      leaveId,
+      userId,
+      name,
+      type,
+      date,
+      duration,
+      reason,
+      "pending",
+      "",
+      new Date().toISOString()
+    ]]
+  }
+});
+
+return leaveId;
 
 async function updateLeaveStatus(leaveId, status, approver) {
   const auth = new google.auth.GoogleAuth({
