@@ -29,15 +29,22 @@ app.post("/webhook", async (req, res) => {
       if (event.type === "postback") {
         const [action, leaveId] = event.postback.data.split("|");
 
-        if (action === "approve") {
-          await updateLeaveStatus(leaveId, "approved", event.source.userId);
-          await replyText(event.replyToken, `อนุมัติใบลา ${leaveId} แล้ว`);
-        }
+if (action === "approve") {
+  console.log("APPROVE:", leaveId);
 
-        if (action === "reject") {
-          await updateLeaveStatus(leaveId, "rejected", event.source.userId);
-          await replyText(event.replyToken, `ปฏิเสธใบลา ${leaveId} แล้ว`);
-        }
+  await updateLeaveStatus(
+    leaveId,
+    "approved",
+    event.source.userId
+  );
+
+  console.log("APPROVED SUCCESS");
+
+  await replyText(
+    event.replyToken,
+    `อนุมัติใบลา ${leaveId} แล้ว`
+  );
+}
 
         continue;
       }
