@@ -24,7 +24,58 @@ app.post("/webhook", async (req, res) => {
 
   const events = req.body.events || [];
 
-  for (const event of events) {
+ for (const event of events) {
+  try {
+    if (event.type === "postback") {
+      const [action, leaveId] = event.postback.data.split("|");
+
+      if (action === "approve") {
+        await updateLeaveStatus(leaveId, "approved", event.source.userId);
+        await replyText(event.replyToken, `อนุมัติใบลา ${leaveId} แล้ว`);
+      }
+
+      if (action === "reject") {
+        await updateLeaveStatus(leaveId, "rejected", event.source.userId);
+        await replyText(event.replyToken, `ปฏิเสธใบลา ${leaveId} แล้ว`);
+      }
+
+      continue;
+    }
+
+    if (event.type === "message" && event.message.type === "text") {
+      const text = event.message.text.trim();
+
+      if (text.startsWith("ลา ")) {
+        const parts = text.split(" ");
+        const type = parts[1] || "-";
+        const date = parts[2] || "-";
+        const duration = parts[3] || "-";
+        const reason = parts.slice(4).join(" ") || "-";
+
+        const leaveId = await saveLeaveToSheet({
+          userId: event.source.userId,
+          type,
+          date,
+          duration,
+          reason
+        });
+
+        await replyFlex(event.replyToken, createLeaveFlex(text, leaveId));
+      } else {
+        await replyText(
+          event.replyToken,
+          "พิมพ์ขอลาแบบนี้:\nลา ลาป่วย 2026-05-10 ครึ่งวัน ปวดฟัน"
+        );
+      }
+    }
+  } catch (err) {
+    console.error("EVENT ERROR:", err.response?.data || err.message);
+  }
+}
+
+    if (event.type === "message" && event.message.type === "text") {
+  continue;
+}
     try {
       if (event.type === "message" && event.message.type === "text") {
         const text = event.message.text.trim();
@@ -36,7 +87,7 @@ const date = parts[2] || "-";
 const duration = parts[3] || "-";
 const reason = parts.slice(4).join(" ") || "-";
 
-await saveLeaveToSheet({
+const leaveId = await saveLeaveToSheet({
   userId: event.source.userId,
   type,
   date,
@@ -44,7 +95,7 @@ await saveLeaveToSheet({
   reason
 });
 
-await replyFlex(event.replyToken, createLeaveFlex(text));
+await replyFlex(event.replyToken, createLeaveFlex(text, leaveId));
         } else {
           await replyText(
             event.replyToken,
@@ -58,7 +109,7 @@ await replyFlex(event.replyToken, createLeaveFlex(text));
   }
 });
 
-function createLeaveFlex(text) {
+function createLeaveFlex(text, leaveId) {
   const parts = text.split(" ");
   const type = parts[1] || "-";
   const date = parts[2] || "-";
@@ -137,9 +188,8 @@ function createLeaveFlex(text) {
         layout: "vertical",
         spacing: "sm",
         contents: [
-          btn("✅ อนุมัติ", "#0b5d32", "อนุมัติแล้ว"),
-          btn("✅ ⏳ อนุมัติแบบมีเงื่อนไข", "#9a7400", "อนุมัติแบบมีเงื่อนไข"),
-          btn("❌ ปฏิเสธ", "#d9dde6", "ปฏิเสธใบลา", "secondary"),
+postbackBtn("✅ อนุมัติ", "#0b5d32", `approve|${leaveId}`),
+postbackBtn("❌ ปฏิเสธ", "#d9dde6", `reject|${leaveId}`, "secondary"),
           btn("ℹ️ ขอข้อมูลเพิ่ม", "#d9dde6", "ขอข้อมูลเพิ่มเติม", "secondary")
         ]
       }
@@ -170,7 +220,7 @@ function row(label, value) {
   };
 }
 
-function btn(label, color, text, style = "primary") {
+function btn (label, color, text, style = "primary") {
   const button = {
     type: "button",
     style,
@@ -178,6 +228,24 @@ function btn(label, color, text, style = "primary") {
       type: "message",
       label,
       text
+    }
+  };
+
+  if (style === "primary") {
+    button.color = color;
+  }
+
+  return button;
+}
+function postbackBtn(label, color, data, style = "primary") {
+  const button = {
+    type: "button",
+    style,
+    action: {
+      type: "postback",
+      label,
+      data,
+      displayText: label
     }
   };
 
@@ -244,6 +312,37 @@ async function saveLeaveToSheet({ userId, type, date, duration, reason }) {
         "",
         new Date().toISOString()
       ]]
+    }
+  });
+}
+async function updateLeaveStatus(leaveId, status, approver) {
+  const auth = new google.auth.GoogleAuth({
+    credentials: SERVICE_ACCOUNT,
+    scopes: ["https://www.googleapis.com/auth/spreadsheets"]
+  });
+
+  const sheets = google.sheets({ version: "v4", auth });
+
+  const result = await sheets.spreadsheets.values.get({
+    spreadsheetId: SHEET_ID,
+    range: "A:J"
+  });
+
+  const rows = result.data.values || [];
+  const rowIndex = rows.findIndex(row => row[0] === leaveId);
+
+  if (rowIndex === -1) {
+    throw new Error(`Leave ID not found: ${leaveId}`);
+  }
+
+  const sheetRow = rowIndex + 1;
+
+  await sheets.spreadsheets.values.update({
+    spreadsheetId: SHEET_ID,
+    range: `H${sheetRow}:I${sheetRow}`,
+    valueInputOption: "USER_ENTERED",
+    requestBody: {
+      values: [[status, approver]]
     }
   });
 }
