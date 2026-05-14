@@ -67,20 +67,21 @@ if (action === "reject") {
       if (event.type === "message" && event.message.type === "text") {
         const text = event.message.text.trim();
 
-        if (text.startsWith("ลา ")) {
-          const parts = text.split(" ");
-          const type = parts[1] || "-";
-          const date = parts[2] || "-";
-          const duration = parts[3] || "-";
-          const reason = parts.slice(4).join(" ") || "-";
+        if (text.startsWith("แจ้งลา")) {
+const name = getField(text, "ชื่อ");
+const type = getField(text, "ประเภท");
+const date = getField(text, "วันที่");
+const duration = getField(text, "เวลา");
+const reason = getField(text, "เหตุผล");
 
-          const leaveId = await saveLeaveToSheet({
-            userId: event.source.userId,
-            type,
-            date,
-            duration,
-            reason
-          });
+const leaveId = await saveLeaveToSheet({
+  userId: event.source.userId,
+  name,
+  type,
+  date,
+  duration,
+  reason
+});
 
           await replyFlex(event.replyToken, createLeaveFlex(text, leaveId));
         } else {
@@ -97,11 +98,11 @@ if (action === "reject") {
 });
 
 function createLeaveFlex(text, leaveId) {
-  const parts = text.split(" ");
-  const type = parts[1] || "-";
-  const date = parts[2] || "-";
-  const duration = parts[3] || "-";
-  const reason = parts.slice(4).join(" ") || "-";
+const name = getField(text, "ชื่อ");
+const type = getField(text, "ประเภท");
+const date = getField(text, "วันที่");
+const duration = getField(text, "เวลา");
+const reason = getField(text, "เหตุผล");
 
   const quota = {
     "ลาป่วย": 30,
@@ -136,7 +137,7 @@ function createLeaveFlex(text, leaveId) {
           { type: "separator" },
           {
             type: "text",
-            text: "เจ้าของ ระบบ",
+            text: name,
             weight: "bold"
           },
           {
@@ -183,7 +184,13 @@ postbackBtn("❌ ปฏิเสธ", "#d9dde6", `reject|${leaveId}`, "secondary
     }
   };
 }
+function getField(text, label) {
+  const line = text
+    .split("\n")
+    .find(l => l.trim().startsWith(label + ":"));
 
+  return line ? line.replace(label + ":", "").trim() : "-";
+}
 function row(label, value) {
   return {
     type: "box",
@@ -274,7 +281,7 @@ async function replyFlex(replyToken, flexMessage) {
     }
   );
 }
-async function saveLeaveToSheet({ userId, type, date, duration, reason }) {
+async function saveLeaveToSheet({ userId, name, type, date, duration, reason }) {
   const auth = new google.auth.GoogleAuth({
     credentials: SERVICE_ACCOUNT,
     scopes: ["https://www.googleapis.com/auth/spreadsheets"]
@@ -290,7 +297,7 @@ async function saveLeaveToSheet({ userId, type, date, duration, reason }) {
       values: [[
         `LV-${Date.now()}`,
         userId,
-        "เจ้าของ ระบบ",
+        name,
         type,
         date,
         duration,
@@ -319,7 +326,7 @@ async function saveLeaveToSheet({ userId, type, date, duration, reason }) {
       values: [[
         leaveId,
         userId,
-        "เจ้าของ ระบบ",
+        name,
         type,
         date,
         duration,
