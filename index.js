@@ -3,8 +3,9 @@ const axios = require("axios");
 const { google } = require("googleapis");
 
 const SHEET_ID = process.env.GOOGLE_SHEET_ID;
-const SERVICE_ACCOUNT = JSON.parse(process.env.GOOGLE_SERVICE_ACCOUNT_JSON);
-const app = express();
+const SERVICE_ACCOUNT = JSON.parse(
+  process.env.GOOGLE_SERVICE_ACCOUNT_JSON.replace(/\\n/g, '\n')
+);const app = express();
 app.use(express.json());
 
 const TOKEN = process.env.LINE_CHANNEL_ACCESS_TOKEN;
