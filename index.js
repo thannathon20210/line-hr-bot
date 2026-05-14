@@ -287,7 +287,7 @@ async function saveLeaveToSheet({ userId, type, date, duration, reason }) {
     }
   });
 }
-async function updateLeaveStatus(leaveId, status, approver) {
+async function saveLeaveToSheet({ userId, type, date, duration, reason }) {
   const auth = new google.auth.GoogleAuth({
     credentials: SERVICE_ACCOUNT,
     scopes: ["https://www.googleapis.com/auth/spreadsheets"]
@@ -295,10 +295,30 @@ async function updateLeaveStatus(leaveId, status, approver) {
 
   const sheets = google.sheets({ version: "v4", auth });
 
-  const result = await sheets.spreadsheets.values.get({
+  const leaveId = `LV-${Date.now()}`;
+
+  await sheets.spreadsheets.values.append({
     spreadsheetId: SHEET_ID,
-    range: "A:J"
+    range: "A:J",
+    valueInputOption: "USER_ENTERED",
+    requestBody: {
+      values: [[
+        leaveId,
+        userId,
+        "เจ้าของ ระบบ",
+        type,
+        date,
+        duration,
+        reason,
+        "pending",
+        "",
+        new Date().toISOString()
+      ]]
+    }
   });
+
+  return leaveId;
+}
 
   const rows = result.data.values || [];
   const rowIndex = rows.findIndex(row => row[0] === leaveId);
