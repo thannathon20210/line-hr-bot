@@ -25,7 +25,21 @@ app.post("/webhook", async (req, res) => {
         const text = event.message.text.trim();
 
         if (text.startsWith("ลา ")) {
-          await replyFlex(event.replyToken, createLeaveFlex(text));
+          const parts = text.split(" ");
+const type = parts[1] || "-";
+const date = parts[2] || "-";
+const duration = parts[3] || "-";
+const reason = parts.slice(4).join(" ") || "-";
+
+await saveLeaveToSheet({
+  userId: event.source.userId,
+  type,
+  date,
+  duration,
+  reason
+});
+
+await replyFlex(event.replyToken, createLeaveFlex(text));
         } else {
           await replyText(
             event.replyToken,
@@ -200,7 +214,34 @@ async function replyFlex(replyToken, flexMessage) {
     }
   );
 }
+async function saveLeaveToSheet({ userId, type, date, duration, reason }) {
+  const auth = new google.auth.GoogleAuth({
+    credentials: SERVICE_ACCOUNT,
+    scopes: ["https://www.googleapis.com/auth/spreadsheets"]
+  });
 
+  const sheets = google.sheets({ version: "v4", auth });
+
+  await sheets.spreadsheets.values.append({
+    spreadsheetId: SHEET_ID,
+    range: "Leaves!A:J",
+    valueInputOption: "USER_ENTERED",
+    requestBody: {
+      values: [[
+        `LV-${Date.now()}`,
+        userId,
+        "เจ้าของ ระบบ",
+        type,
+        date,
+        duration,
+        reason,
+        "pending",
+        "",
+        new Date().toISOString()
+      ]]
+    }
+  });
+}
 app.listen(PORT, () => {
   console.log(`LINE HR BOT START PORT ${PORT}`);
 });
