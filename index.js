@@ -294,7 +294,6 @@ async function saveLeaveToSheet({ userId, type, date, duration, reason }) {
   });
 
   const sheets = google.sheets({ version: "v4", auth });
-
   const leaveId = `LV-${Date.now()}`;
 
   await sheets.spreadsheets.values.append({
@@ -319,6 +318,19 @@ async function saveLeaveToSheet({ userId, type, date, duration, reason }) {
 
   return leaveId;
 }
+
+async function updateLeaveStatus(leaveId, status, approver) {
+  const auth = new google.auth.GoogleAuth({
+    credentials: SERVICE_ACCOUNT,
+    scopes: ["https://www.googleapis.com/auth/spreadsheets"]
+  });
+
+  const sheets = google.sheets({ version: "v4", auth });
+
+  const result = await sheets.spreadsheets.values.get({
+    spreadsheetId: SHEET_ID,
+    range: "A:J"
+  });
 
   const rows = result.data.values || [];
   const rowIndex = rows.findIndex(row => row[0] === leaveId);
