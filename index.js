@@ -229,7 +229,7 @@ async function saveLeaveToSheet({ userId, type, date, duration, reason }) {
 
   await sheets.spreadsheets.values.append({
     spreadsheetId: SHEET_ID,
-    range: "Leaves!A:J",
+    range: "A:J",
     valueInputOption: "USER_ENTERED",
     requestBody: {
       values: [[
