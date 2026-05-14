@@ -22,7 +22,7 @@ app.post("/webhook", async (req, res) => {
         const text = event.message.text.trim();
 
         if (text.startsWith("ลา ")) {
-          await replyFlex(event.replyToken, createLeaveFlex(text));
+          await replyText(event.replyToken, "ทดสอบตอบกลับสำเร็จ");
         } else {
           await replyText(
             event.replyToken,
