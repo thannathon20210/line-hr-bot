@@ -45,7 +45,22 @@ if (action === "approve") {
     `อนุมัติใบลา ${leaveId} แล้ว`
   );
 }
+if (action === "reject") {
+  console.log("REJECT:", leaveId);
 
+  await updateLeaveStatus(
+    leaveId,
+    "rejected",
+    event.source.userId
+  );
+
+  console.log("REJECTED SUCCESS");
+
+  await replyText(
+    event.replyToken,
+    `ปฏิเสธใบลา ${leaveId} แล้ว`
+  );
+}
         continue;
       }
 
