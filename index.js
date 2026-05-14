@@ -24,78 +24,43 @@ app.post("/webhook", async (req, res) => {
 
   const events = req.body.events || [];
 
- for (const event of events) {
-  try {
-    if (event.type === "postback") {
-      const [action, leaveId] = event.postback.data.split("|");
-
-      if (action === "approve") {
-        await updateLeaveStatus(leaveId, "approved", event.source.userId);
-        await replyText(event.replyToken, `อนุมัติใบลา ${leaveId} แล้ว`);
-      }
-
-      if (action === "reject") {
-        await updateLeaveStatus(leaveId, "rejected", event.source.userId);
-        await replyText(event.replyToken, `ปฏิเสธใบลา ${leaveId} แล้ว`);
-      }
-
-      continue;
-    }
-
-    if (event.type === "message" && event.message.type === "text") {
-      const text = event.message.text.trim();
-
-      if (text.startsWith("ลา ")) {
-        const parts = text.split(" ");
-        const type = parts[1] || "-";
-        const date = parts[2] || "-";
-        const duration = parts[3] || "-";
-        const reason = parts.slice(4).join(" ") || "-";
-
-        const leaveId = await saveLeaveToSheet({
-          userId: event.source.userId,
-          type,
-          date,
-          duration,
-          reason
-        });
-
-        await replyFlex(event.replyToken, createLeaveFlex(text, leaveId));
-      } else {
-        await replyText(
-          event.replyToken,
-          "พิมพ์ขอลาแบบนี้:\nลา ลาป่วย 2026-05-10 ครึ่งวัน ปวดฟัน"
-        );
-      }
-    }
-  } catch (err) {
-    console.error("EVENT ERROR:", err.response?.data || err.message);
-  }
-}
-
-    if (event.type === "message" && event.message.type === "text") {
-  continue;
-}
+  for (const event of events) {
     try {
+      if (event.type === "postback") {
+        const [action, leaveId] = event.postback.data.split("|");
+
+        if (action === "approve") {
+          await updateLeaveStatus(leaveId, "approved", event.source.userId);
+          await replyText(event.replyToken, `อนุมัติใบลา ${leaveId} แล้ว`);
+        }
+
+        if (action === "reject") {
+          await updateLeaveStatus(leaveId, "rejected", event.source.userId);
+          await replyText(event.replyToken, `ปฏิเสธใบลา ${leaveId} แล้ว`);
+        }
+
+        continue;
+      }
+
       if (event.type === "message" && event.message.type === "text") {
         const text = event.message.text.trim();
 
         if (text.startsWith("ลา ")) {
           const parts = text.split(" ");
-const type = parts[1] || "-";
-const date = parts[2] || "-";
-const duration = parts[3] || "-";
-const reason = parts.slice(4).join(" ") || "-";
+          const type = parts[1] || "-";
+          const date = parts[2] || "-";
+          const duration = parts[3] || "-";
+          const reason = parts.slice(4).join(" ") || "-";
 
-const leaveId = await saveLeaveToSheet({
-  userId: event.source.userId,
-  type,
-  date,
-  duration,
-  reason
-});
+          const leaveId = await saveLeaveToSheet({
+            userId: event.source.userId,
+            type,
+            date,
+            duration,
+            reason
+          });
 
-await replyFlex(event.replyToken, createLeaveFlex(text, leaveId));
+          await replyFlex(event.replyToken, createLeaveFlex(text, leaveId));
         } else {
           await replyText(
             event.replyToken,
