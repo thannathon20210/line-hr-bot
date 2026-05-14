@@ -1,6 +1,9 @@
 const express = require("express");
 const axios = require("axios");
+const { google } = require("googleapis");
 
+const SHEET_ID = process.env.GOOGLE_SHEET_ID;
+const SERVICE_ACCOUNT = JSON.parse(process.env.GOOGLE_SERVICE_ACCOUNT_JSON);
 const app = express();
 app.use(express.json());
 
