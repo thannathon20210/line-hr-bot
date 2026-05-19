@@ -345,3 +345,7 @@ async function updateLeaveStatus(leaveId, status, approver) {
 app.listen(PORT, () => {
   console.log(`LINE HR BOT START PORT ${PORT}`);
 });
+  return leaveId;
+}
+
+async function updateLeaveStatus(leaveId, status, approver) {
