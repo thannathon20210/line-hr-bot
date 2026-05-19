@@ -32,6 +32,9 @@ app.post("/webhook", async (req, res) => {
 if (action === "approve") {
   console.log("APPROVE:", leaveId);
 
+  const leave = await getLeaveById(leaveId);
+  const name = leave.name;
+
   await updateLeaveStatus(
     leaveId,
     "approved",
@@ -42,7 +45,7 @@ if (action === "approve") {
 
   await replyText(
     event.replyToken,
-    `อนุมัติใบลา ${leaveId} แล้ว`
+    `อนุมัติใบลาของ ${name} แล้ว`
   );
 }
 if (action === "reject") {
@@ -344,6 +347,35 @@ async function updateLeaveStatus(leaveId, status, approver) {
       values: [[status, approver]]
     }
   });
+}
+async function getLeaveById(leaveId) {
+  const auth = new google.auth.GoogleAuth({
+    credentials: SERVICE_ACCOUNT,
+    scopes: ["https://www.googleapis.com/auth/spreadsheets"]
+  });
+
+  const sheets = google.sheets({ version: "v4", auth });
+
+  const result = await sheets.spreadsheets.values.get({
+    spreadsheetId: SHEET_ID,
+    range: "A:J"
+  });
+
+  const rows = result.data.values || [];
+
+  const row = rows.find(r => r[0] === leaveId);
+
+  if (!row) {
+    throw new Error("Leave not found");
+  }
+
+  return {
+    leaveId: row[0],
+    userId: row[1],
+    name: row[2],
+    type: row[3],
+    date: row[4]
+  };
 }
 app.listen(PORT, () => {
   console.log(`LINE HR BOT START PORT ${PORT}`);
