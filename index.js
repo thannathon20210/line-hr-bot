@@ -285,9 +285,11 @@ async function saveLeaveToSheet({ userId, name, type, date, duration, reason }) 
   const auth = new google.auth.GoogleAuth({
     credentials: SERVICE_ACCOUNT,
     scopes: ["https://www.googleapis.com/auth/spreadsheets"]
-  });
+});
 
- const leaveId = `LV-${Date.now()}`;
+const sheets = google.sheets({ version: "v4", auth });
+
+const leaveId = `LV-${Date.now()}`;
 
 await sheets.spreadsheets.values.append({
   spreadsheetId: SHEET_ID,
