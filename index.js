@@ -87,7 +87,8 @@ const leaveId = await saveLeaveToSheet({
   reason
 });
 
-          await replyFlex(event.replyToken, createLeaveFlex(text, leaveId));
+    const balance = await getLeaveBalance(event.source.userId);
+await replyFlex(event.replyToken, createLeaveFlex(text, leaveId, balance));
         } else {
           await replyText(
             event.replyToken,
@@ -101,7 +102,7 @@ const leaveId = await saveLeaveToSheet({
   }
 });
 
-function createLeaveFlex(text, leaveId) {
+function createLeaveFlex(text, leaveId, balance) {
 const name = getField(text, "ชื่อ");
 const type = getField(text, "ประเภท");
 const date = getField(text, "วันที่");
@@ -162,10 +163,10 @@ const reason = getField(text, "เหตุผล");
             weight: "bold",
             color: "#666666"
           },
-          row("ลาป่วย", "30 วัน/ปี"),
-          row("ลากิจ", "6 วัน/ปี"),
-          row("ลาพักร้อน", "10 วัน/ปี"),
-          row("ลาบวช", "15 วัน/ปี"),
+row("ลาป่วย", `เหลือ ${balance["ลาป่วย"].remaining} วัน/ปี`),
+row("ลากิจ", `เหลือ ${balance["ลากิจ"].remaining} วัน/ปี`),
+row("ลาพักร้อน", `เหลือ ${balance["ลาพักร้อน"].remaining} วัน/ปี`),
+row("ลาบวช", `เหลือ ${balance["ลาบวช"].remaining} วัน/ปี`),
           { type: "separator" },
           {
             type: "text",
@@ -377,6 +378,62 @@ async function getLeaveById(leaveId) {
     type: row[3],
     date: row[4]
   };
+}
+async function getLeaveBalance(userId) {
+  const auth = new google.auth.GoogleAuth({
+    credentials: SERVICE_ACCOUNT,
+    scopes: ["https://www.googleapis.com/auth/spreadsheets"]
+  });
+
+  const sheets = google.sheets({ version: "v4", auth });
+
+  const result = await sheets.spreadsheets.values.get({
+    spreadsheetId: SHEET_ID,
+    range: "A:J"
+  });
+
+  const rows = result.data.values || [];
+
+  const quota = {
+    "ลาป่วย": 30,
+    "ลากิจ": 6,
+    "ลาพักร้อน": 10,
+    "ลาบวช": 15
+  };
+
+  const used = {
+    "ลาป่วย": 0,
+    "ลากิจ": 0,
+    "ลาพักร้อน": 0,
+    "ลาบวช": 0
+  };
+
+  rows.forEach(row => {
+    const rowUserId = row[1];
+    const type = row[3];
+    const duration = parseInt(row[5]) || 1;
+    const status = row[7];
+
+    if (
+      rowUserId === userId &&
+      status === "approved" &&
+      used[type] !== undefined
+    ) {
+      used[type] += duration;
+    }
+  });
+
+  const balance = {};
+
+  Object.keys(quota).forEach(type => {
+    balance[type] = {
+      total: quota[type],
+      used: used[type],
+      remaining: quota[type] - used[type]
+    };
+  });
+
+  return balance;
 }
 app.listen(PORT, () => {
   console.log(`LINE HR BOT START PORT ${PORT}`);
