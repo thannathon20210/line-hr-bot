@@ -50,7 +50,8 @@ if (action === "approve") {
 }
 if (action === "reject") {
   console.log("REJECT:", leaveId);
-
+const leave = await getLeaveById(leaveId);
+const name = leave.name;
   await updateLeaveStatus(
     leaveId,
     "rejected",
@@ -61,7 +62,7 @@ if (action === "reject") {
 
   await replyText(
     event.replyToken,
-    `ปฏิเสธใบลา ${leaveId} แล้ว`
+    `ปฏิเสธใบลาของ ${name} แล้ว`
   );
 }
         continue;
