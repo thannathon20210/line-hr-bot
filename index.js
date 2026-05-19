@@ -347,5 +347,16 @@ app.listen(PORT, () => {
 });
   return leaveId;
 }
+await sheets.spreadsheets.values.update({
+  spreadsheetId: SHEET_ID,
+  range: `H${sheetRow}:I${sheetRow}`,
+  valueInputOption: "USER_ENTERED",
+  requestBody: {
+    values: [[status, approver]]
+  }
+});
+}
 
-async function updateLeaveStatus(leaveId, status, approver) {
+app.listen(PORT, () => {
+  console.log(`LINE HR BOT START PORT ${PORT}`);
+});
