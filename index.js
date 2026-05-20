@@ -341,7 +341,11 @@ async function updateLeaveStatus(leaveId, status, approver) {
   if (rowIndex === -1) {
     throw new Error(`Leave ID not found: ${leaveId}`);
   }
+const currentStatus = rows[rowIndex][7];
 
+if (currentStatus !== "pending") {
+  throw new Error(`ใบลานี้ถูกดำเนินการแล้ว: ${currentStatus}`);
+}
   const sheetRow = rowIndex + 1;
 
   await sheets.spreadsheets.values.update({
