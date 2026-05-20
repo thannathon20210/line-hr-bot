@@ -208,8 +208,7 @@ row("ลาบวช", `เหลือ ${balance["ลาบวช"].remaining} 
         contents: [
 postbackBtn("✅ อนุมัติ", "#0b5d32", `approve|${leaveId}`),
 postbackBtn("❌ ปฏิเสธ", "#d9dde6", `reject|${leaveId}`, "secondary"),
-          btn("ℹ️ ขอข้อมูลเพิ่ม", "#d9dde6", "ขอข้อมูลเพิ่มเติม", "secondary")
-        ]
+postbackBtn("ℹ️ ขอข้อมูลเพิ่ม", "#d9dde6", `request_info|${leaveId}`, "secondary")        ]
       }
     }
   };
