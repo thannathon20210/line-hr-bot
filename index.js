@@ -51,6 +51,25 @@ await replyText(
   `อนุมัติใบลาของ ${name} แล้ว\nคงเหลือ ${leave.type}: ${remaining} วัน/ปี`
 );
 }
+        if (action === "request_info") {
+  console.log("REQUEST INFO:", leaveId);
+
+  const leave = await getLeaveById(leaveId);
+  const name = leave.name;
+
+  await updateLeaveStatus(
+    leaveId,
+    "request_info",
+    event.source.userId
+  );
+
+  await replyText(
+    event.replyToken,
+    `ขอข้อมูลเพิ่มเติมจาก ${name}`
+  );
+
+  continue;
+}
 if (action === "reject") {
   console.log("REJECT:", leaveId);
 const leave = await getLeaveById(leaveId);
