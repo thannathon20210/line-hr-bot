@@ -101,6 +101,9 @@ await replyFlex(event.replyToken, createLeaveFlex(text, leaveId, balance));
       }
     } catch (err) {
       console.error("EVENT ERROR:", err.response?.data || err.message);
+      if (err.message?.includes("ใบลานี้ถูกดำเนินการแล้ว")) {
+  await replyText(event.replyToken, err.message);
+}
     }
   }
 });
