@@ -63,10 +63,10 @@ await replyText(
     event.source.userId
   );
 
-  await replyText(
-    event.replyToken,
-    `ขอข้อมูลเพิ่มเติมจาก ${name}`
-  );
+await replyText(
+  event.replyToken,
+  `ขอข้อมูลเพิ่มเติมจาก ${name}\nประเภท: ${leave.type}\nวันที่: ${leave.date}\nระยะเวลา: ${leave.duration}\nเหตุผล: ${leave.reason}`
+);
 
   continue;
 }
@@ -400,13 +400,15 @@ async function getLeaveById(leaveId) {
     throw new Error("Leave not found");
   }
 
-  return {
-    leaveId: row[0],
-    userId: row[1],
-    name: row[2],
-    type: row[3],
-    date: row[4]
-  };
+return {
+  leaveId: row[0],
+  userId: row[1],
+  name: row[2],
+  type: row[3],
+  date: row[4],
+  duration: row[5],
+  reason: row[6]
+};
 }
 async function getLeaveBalance(userId) {
   const auth = new google.auth.GoogleAuth({
