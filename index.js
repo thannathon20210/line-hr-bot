@@ -35,18 +35,21 @@ if (action === "approve") {
   const leave = await getLeaveById(leaveId);
   const name = leave.name;
 
-  await updateLeaveStatus(
-    leaveId,
-    "approved",
-    event.source.userId
-  );
+ await updateLeaveStatus(
+  leaveId,
+  "approved",
+  event.source.userId
+);
 
-  console.log("APPROVED SUCCESS");
+const balance = await getLeaveBalance(leave.userId);
+const remaining = balance[leave.type].remaining;
 
-  await replyText(
-    event.replyToken,
-    `อนุมัติใบลาของ ${name} แล้ว`
-  );
+console.log("APPROVED SUCCESS");
+
+await replyText(
+  event.replyToken,
+  `อนุมัติใบลาของ ${name} แล้ว\nคงเหลือ ${leave.type}: ${remaining} วัน/ปี`
+);
 }
 if (action === "reject") {
   console.log("REJECT:", leaveId);
