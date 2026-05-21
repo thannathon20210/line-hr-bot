@@ -99,7 +99,18 @@ const type = getField(text, "ประเภท");
 const date = getField(text, "วันที่");
 const duration = getField(text, "เวลา");
 const reason = getField(text, "เหตุผล");
+const exists = await hasDuplicateLeave(
+  event.source.userId,
+  date
+);
 
+if (exists) {
+  await replyText(
+    event.replyToken,
+    "คุณมีใบลาในช่วงวันที่นี้อยู่แล้ว"
+  );
+  continue;
+}
 const leaveId = await saveLeaveToSheet({
   userId: event.source.userId,
   name,
@@ -409,7 +420,7 @@ return {
   reason: row[6]
 };
 }
-async function getLeaveBalance(userId) {
+async function hasDuplicateLeave(userId, date) {
   const auth = new google.auth.GoogleAuth({
     credentials: SERVICE_ACCOUNT,
     scopes: ["https://www.googleapis.com/auth/spreadsheets"]
@@ -424,6 +435,32 @@ async function getLeaveBalance(userId) {
 
   const rows = result.data.values || [];
 
+  return rows.some(row => {
+    const rowUserId = row[1];
+    const rowDate = row[4];
+    const status = row[7];
+
+    return (
+      rowUserId === userId &&
+      rowDate === date &&
+      (status === "pending" || status === "approved")
+    );
+  });
+}
+ async function getLeaveBalance(userId) {
+  const auth = new google.auth.GoogleAuth({
+    credentials: SERVICE_ACCOUNT,
+    scopes: ["https://www.googleapis.com/auth/spreadsheets"]
+  });
+
+  const sheets = google.sheets({ version: "v4", auth });
+
+  const result = await sheets.spreadsheets.values.get({
+    spreadsheetId: SHEET_ID,
+    range: "A:J"
+  });
+
+  const rows = result.data.values || [];
   const quota = {
     "ลาป่วย": 30,
     "ลากิจ": 6,
