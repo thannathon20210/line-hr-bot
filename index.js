@@ -43,9 +43,7 @@ if (action === "approve") {
 
 const balance = await getLeaveBalance(leave.userId);
 const remaining = balance[leave.type].remaining;
-
 console.log("APPROVED SUCCESS");
-
 await replyText(
   event.replyToken,
   `อนุมัติใบลาของ ${name} แล้ว\nคงเหลือ ${leave.type}: ${remaining} วัน/ปี`
@@ -121,6 +119,23 @@ const leaveId = await saveLeaveToSheet({
 });
 
     const balance = await getLeaveBalance(event.source.userId);
+          const remaining = balance[type]?.remaining || 0;
+
+let requestedDays = 1;
+
+if (String(duration).includes("ครึ่ง")) {
+  requestedDays = 0.5;
+} else {
+  requestedDays = parseInt(duration) || 1;
+}
+
+if (requestedDays > remaining) {
+await replyText(
+  event.replyToken,
+  `สิทธิ์ลาไม่เพียงพอ\nเหลือ ${remaining} วัน`
+);
+  continue;
+}
 await replyFlex(event.replyToken, createLeaveFlex(text, leaveId, balance));
         } else {
           await replyText(
