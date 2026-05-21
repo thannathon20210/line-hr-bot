@@ -441,7 +441,13 @@ async function getLeaveBalance(userId) {
   rows.forEach(row => {
     const rowUserId = row[1];
     const type = row[3];
-    const duration = parseInt(row[5]) || 1;
+let duration = 1;
+
+if (String(row[5]).includes("ครึ่ง")) {
+  duration = 0.5;
+} else {
+  duration = parseInt(row[5]) || 1;
+}
     const status = row[7];
 
     if (
