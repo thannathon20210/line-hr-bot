@@ -137,6 +137,8 @@ await replyText(
   continue;
 }
 await replyFlex(event.replyToken, createLeaveFlex(text, leaveId, balance));
+}
+
 else if (text === "สิทธิลา") {
   const balance = await getLeaveBalance(event.source.userId);
 
@@ -147,15 +149,7 @@ else if (text === "สิทธิลา") {
     `ลากิจ: ${balance["ลากิจ"].remaining} วัน\n` +
     `ลาพักร้อน: ${balance["ลาพักร้อน"].remaining} วัน\n` +
     `ลาบวช: ${balance["ลาบวช"].remaining} วัน`
-  );
-}
-        else { 
-          await replyText(
-            event.replyToken,
-            "พิมพ์ขอลาแบบนี้:\nลา ลาป่วย 2026-05-10 ครึ่งวัน ปวดฟัน"
-          );
-        }
-      }
+  );​
     } catch (err) {
       console.error("EVENT ERROR:", err.response?.data || err.message);
       if (err.message?.includes("ใบลานี้ถูกดำเนินการแล้ว")) {
