@@ -9,6 +9,7 @@ const SERVICE_ACCOUNT = JSON.parse(
     "base64"
   ).toString("utf8")
 );
+
 const app = express();
 app.use(express.json());
 
@@ -29,135 +30,173 @@ app.post("/webhook", async (req, res) => {
       if (event.type === "postback") {
         const [action, leaveId] = event.postback.data.split("|");
 
-if (action === "approve") {
-  console.log("APPROVE:", leaveId);
+        if (action === "approve") {
+          console.log("APPROVE:", leaveId);
 
-  const leave = await getLeaveById(leaveId);
-  const name = leave.name;
+          const leave = await getLeaveById(leaveId);
+          const name = leave.name || leave.displayName || "-";
 
- await updateLeaveStatus(
-  leaveId,
-  "approved",
-  event.source.userId
-);
+          await updateLeaveStatus(
+            leaveId,
+            "approved",
+            event.source.userId
+          );
 
-const balance = await getLeaveBalance(leave.userId);
-const remaining = balance[leave.type].remaining;
-console.log("APPROVED SUCCESS");
-await replyText(
-  event.replyToken,
-  `อนุมัติใบลาของ ${name} แล้ว\nคงเหลือ ${leave.type}: ${remaining} วัน/ปี`
-);
-}
+          const balance = await getLeaveBalance(leave.userId);
+          const remaining = balance[leave.type]?.remaining ?? 0;
+
+          console.log("APPROVED SUCCESS");
+
+          await replyText(
+            event.replyToken,
+            `อนุมัติใบลาของ ${name} แล้ว\nคงเหลือ ${leave.type}: ${remaining} วัน/ปี`
+          );
+
+          continue;
+        }
+
         if (action === "request_info") {
-  console.log("REQUEST INFO:", leaveId);
+          console.log("REQUEST INFO:", leaveId);
 
-  const leave = await getLeaveById(leaveId);
-  const name = leave.name;
+          const leave = await getLeaveById(leaveId);
+          const name = leave.name || leave.displayName || "-";
 
-  await updateLeaveStatus(
-    leaveId,
-    "request_info",
-    event.source.userId
-  );
+          await updateLeaveStatus(
+            leaveId,
+            "request_info",
+            event.source.userId
+          );
 
-await replyText(
-  event.replyToken,
-  `ขอข้อมูลเพิ่มเติมจาก ${name}\nประเภท: ${leave.type}\nวันที่: ${leave.date}\nระยะเวลา: ${leave.duration}\nเหตุผล: ${leave.reason}`
-);
+          await replyText(
+            event.replyToken,
+            `ขอข้อมูลเพิ่มเติมจาก ${name}\nประเภท: ${leave.type}\nวันที่: ${leave.date}\nระยะเวลา: ${leave.duration}\nเหตุผล: ${leave.reason}`
+          );
 
-  continue;
-}
-if (action === "reject") {
-  console.log("REJECT:", leaveId);
-const leave = await getLeaveById(leaveId);
-const name = leave.name;
-  await updateLeaveStatus(
-    leaveId,
-    "rejected",
-    event.source.userId
-  );
+          continue;
+        }
 
-  console.log("REJECTED SUCCESS");
+        if (action === "reject") {
+          console.log("REJECT:", leaveId);
 
-  await replyText(
-    event.replyToken,
-    `ปฏิเสธใบลาของ ${name} แล้ว`
-  );
-}
+          const leave = await getLeaveById(leaveId);
+          const name = leave.name || leave.displayName || "-";
+
+          await updateLeaveStatus(
+            leaveId,
+            "rejected",
+            event.source.userId
+          );
+
+          console.log("REJECTED SUCCESS");
+
+          await replyText(
+            event.replyToken,
+            `ปฏิเสธใบลาของ ${name} แล้ว`
+          );
+
+          continue;
+        }
+
         continue;
       }
 
       if (event.type === "message" && event.message.type === "text") {
         const text = event.message.text.trim();
-if (text === "สิทธิลา") {
-  const balance = await getLeaveBalance(event.source.userId);
 
- await replyText(
-  event.replyToken,
-  `สิทธิวันลาคงเหลือ\n\n` +
-  `ลาป่วย: ${balance["ลาป่วย"].remaining} วัน\n` +
-  `ลากิจ: ${balance["ลากิจ"].remaining} วัน\n` +
-  `ลาพักร้อน: ${balance["ลาพักร้อน"].remaining} วัน\n` +
-  `ลาบวช: ${balance["ลาบวช"].remaining} วัน`
-);
+        if (text === "สิทธิลา") {
+          const balance = await getLeaveBalance(event.source.userId);
 
-continue;
-}
+          await replyText(
+            event.replyToken,
+            `สิทธิวันลาคงเหลือ\n\n` +
+            `ลาป่วย: ${balance["ลาป่วย"].remaining} วัน\n` +
+            `ลากิจ: ${balance["ลากิจ"].remaining} วัน\n` +
+            `ลาพักร้อน: ${balance["ลาพักร้อน"].remaining} วัน\n` +
+            `ลาบวช: ${balance["ลาบวช"].remaining} วัน`
+          );
+
+          continue;
+        }
+
         if (text.startsWith("แจ้งลา")) {
-const name = getField(text, "ชื่อ");
-const type = getField(text, "ประเภท");
-const date = getField(text, "วันที่");
-const duration = getField(text, "เวลา");
-const reason = getField(text, "เหตุผล");
-const exists = await hasDuplicateLeave(
-  event.source.userId,
-  date
-);
+          const name = getField(text, "ชื่อ");
+          const type = getField(text, "ประเภท");
+          const date = getField(text, "วันที่");
+          const duration = getField(text, "เวลา");
+          const reason = getField(text, "เหตุผล");
 
-if (exists) {
-  await replyText(
-    event.replyToken,
-    "คุณมีใบลาในช่วงวันที่นี้อยู่แล้ว"
-  );
-  continue;
-}
-const leaveId = await saveLeaveToSheet({
-  userId: event.source.userId,
-  name,
-  type,
-  date,
-  duration,
-  reason
-});
-
-    const balance = await getLeaveBalance(event.source.userId);
+          const balance = await getLeaveBalance(event.source.userId);
           const remaining = balance[type]?.remaining || 0;
 
-let requestedDays = 1;
+          let requestedDays = 1;
 
-if (String(duration).includes("ครึ่ง")) {
-  requestedDays = 0.5;
-} else {
-  requestedDays = parseInt(duration) || 1;
-}
+          if (String(duration).includes("ครึ่ง")) {
+            requestedDays = 0.5;
+          } else {
+            requestedDays = parseInt(duration, 10) || 1;
+          }
 
-if (requestedDays > remaining) {
-await replyText(
-  event.replyToken,
-  `สิทธิ์ลาไม่เพียงพอ\nเหลือ ${remaining} วัน`
-);
-  continue;
-}
-}       
-await replyFlex(event.replyToken, createLeaveFlex(text, leaveId, balance));
-}
+          if (requestedDays > remaining) {
+            await replyText(
+              event.replyToken,
+              `สิทธิ์ลาไม่เพียงพอ\nเหลือ ${remaining} วัน`
+            );
+            continue;
+          }
+
+          const exists = await hasDuplicateLeave(
+            event.source.userId,
+            date
+          );
+
+          if (exists) {
+            await replyText(
+              event.replyToken,
+              "คุณมีใบลาในช่วงวันที่นี้อยู่แล้ว"
+            );
+            continue;
+          }
+
+          const leaveId = await saveLeaveToSheet({
+            userId: event.source.userId,
+            name,
+            type,
+            date,
+            duration,
+            reason
+          });
+
+          await replyFlex(
+            event.replyToken,
+            createLeaveFlex(text, leaveId, balance)
+          );
+
+          continue;
+        }
+      }
+    } catch (error) {
+      console.error("Event handling error:", error);
+
+      if (event.replyToken) {
+        try {
+          await replyText(
+            event.replyToken,
+            "เกิดข้อผิดพลาดในการประมวลผล กรุณาลองใหม่อีกครั้ง"
+          );
+        } catch (replyError) {
+          console.error("Reply error:", replyError);
+        }
+      }
+    }
+  }
+});
+
 function createLeaveFlex(text, leaveId, balance) {
-const name = getField(text, "ชื่อ");
-const type = getField(text, "ประเภท");
-const date = getField(text, "วันที่");
-const duration = getField(text, "เวลา");
-const reason = getField(text, "เหตุผล");
+  const name = getField(text, "ชื่อ");
+  const type = getField(text, "ประเภท");
+  const date = getField(text, "วันที่");
+  const duration = getField(text, "เวลา");
+  const reason = getField(text, "เหตุผล");
 
   const quota = {
     "ลาป่วย": 30,
@@ -213,10 +252,10 @@ const reason = getField(text, "เหตุผล");
             weight: "bold",
             color: "#666666"
           },
-row("ลาป่วย", `เหลือ ${balance["ลาป่วย"].remaining} วัน/ปี`),
-row("ลากิจ", `เหลือ ${balance["ลากิจ"].remaining} วัน/ปี`),
-row("ลาพักร้อน", `เหลือ ${balance["ลาพักร้อน"].remaining} วัน/ปี`),
-row("ลาบวช", `เหลือ ${balance["ลาบวช"].remaining} วัน/ปี`),
+          row("ลาป่วย", `เหลือ ${balance["ลาป่วย"].remaining} วัน/ปี`),
+          row("ลากิจ", `เหลือ ${balance["ลากิจ"].remaining} วัน/ปี`),
+          row("ลาพักร้อน", `เหลือ ${balance["ลาพักร้อน"].remaining} วัน/ปี`),
+          row("ลาบวช", `เหลือ ${balance["ลาบวช"].remaining} วัน/ปี`),
           { type: "separator" },
           {
             type: "text",
@@ -231,13 +270,15 @@ row("ลาบวช", `เหลือ ${balance["ลาบวช"].remaining} 
         layout: "vertical",
         spacing: "sm",
         contents: [
-postbackBtn("✅ อนุมัติ", "#0b5d32", `approve|${leaveId}`),
-postbackBtn("❌ ปฏิเสธ", "#d9dde6", `reject|${leaveId}`, "secondary"),
-postbackBtn("ℹ️ ขอข้อมูลเพิ่ม", "#d9dde6", `request_info|${leaveId}`, "secondary")        ]
+          postbackBtn("✅ อนุมัติ", "#0b5d32", `approve|${leaveId}`),
+          postbackBtn("❌ ปฏิเสธ", "#d9dde6", `reject|${leaveId}`, "secondary"),
+          postbackBtn("ℹ️ ขอข้อมูลเพิ่ม", "#d9dde6", `request_info|${leaveId}`, "secondary")
+        ]
       }
     }
   };
 }
+
 function getField(text, label) {
   const line = text
     .split("\n")
@@ -245,6 +286,7 @@ function getField(text, label) {
 
   return line ? line.replace(label + ":", "").trim() : "-";
 }
+
 function row(label, value) {
   return {
     type: "box",
@@ -268,7 +310,7 @@ function row(label, value) {
   };
 }
 
-function btn (label, color, text, style = "primary") {
+function btn(label, color, text, style = "primary") {
   const button = {
     type: "button",
     style,
@@ -285,6 +327,7 @@ function btn (label, color, text, style = "primary") {
 
   return button;
 }
+
 function postbackBtn(label, color, data, style = "primary") {
   const button = {
     type: "button",
@@ -335,37 +378,38 @@ async function replyFlex(replyToken, flexMessage) {
     }
   );
 }
+
 async function saveLeaveToSheet({ userId, name, type, date, duration, reason }) {
   const auth = new google.auth.GoogleAuth({
     credentials: SERVICE_ACCOUNT,
     scopes: ["https://www.googleapis.com/auth/spreadsheets"]
-});
+  });
 
-const sheets = google.sheets({ version: "v4", auth });
+  const sheets = google.sheets({ version: "v4", auth });
 
-const leaveId = `LV-${Date.now()}`;
+  const leaveId = `LV-${Date.now()}`;
 
-await sheets.spreadsheets.values.append({
-  spreadsheetId: SHEET_ID,
-  range: "A:J",
-  valueInputOption: "USER_ENTERED",
-  requestBody: {
-    values: [[
-      leaveId,
-      userId,
-      name,
-      type,
-      date,
-      duration,
-      reason,
-      "pending",
-      "",
-      new Date().toISOString()
-    ]]
-  }
-});
+  await sheets.spreadsheets.values.append({
+    spreadsheetId: SHEET_ID,
+    range: "A:J",
+    valueInputOption: "USER_ENTERED",
+    requestBody: {
+      values: [[
+        leaveId,
+        userId,
+        name,
+        type,
+        date,
+        duration,
+        reason,
+        "pending",
+        "",
+        new Date().toISOString()
+      ]]
+    }
+  });
 
-return leaveId;
+  return leaveId;
 }
 
 async function updateLeaveStatus(leaveId, status, approver) {
@@ -387,11 +431,13 @@ async function updateLeaveStatus(leaveId, status, approver) {
   if (rowIndex === -1) {
     throw new Error(`Leave ID not found: ${leaveId}`);
   }
-const currentStatus = rows[rowIndex][7];
 
-if (currentStatus !== "pending") {
-  throw new Error(`ใบลานี้ถูกดำเนินการแล้ว: ${currentStatus}`);
-}
+  const currentStatus = rows[rowIndex][7];
+
+  if (currentStatus !== "pending") {
+    throw new Error(`ใบลานี้ถูกดำเนินการแล้ว: ${currentStatus}`);
+  }
+
   const sheetRow = rowIndex + 1;
 
   await sheets.spreadsheets.values.update({
@@ -403,6 +449,7 @@ if (currentStatus !== "pending") {
     }
   });
 }
+
 async function getLeaveById(leaveId) {
   const auth = new google.auth.GoogleAuth({
     credentials: SERVICE_ACCOUNT,
@@ -417,7 +464,6 @@ async function getLeaveById(leaveId) {
   });
 
   const rows = result.data.values || [];
-
   const row = rows.find(r => r[0] === leaveId);
 
   if (!row) {
@@ -427,6 +473,7 @@ async function getLeaveById(leaveId) {
   return {
     leaveId: row[0],
     userId: row[1],
+    name: row[2],
     displayName: row[2],
     type: row[3],
     date: row[4],
@@ -436,8 +483,6 @@ async function getLeaveById(leaveId) {
     approver: row[8],
     createdAt: row[9]
   };
-};
-
 }
 
 async function hasDuplicateLeave(userId, date) {
@@ -456,16 +501,16 @@ async function hasDuplicateLeave(userId, date) {
   const rows = result.data.values || [];
 
   return rows.some(row => {
-  const rowUserId = row[1];
-  const rowDate = row[4];
-  const status = row[7];
+    const rowUserId = row[1];
+    const rowDate = row[4];
+    const status = row[7];
 
-  return (
-    rowUserId === userId &&
-    rowDate === date &&
-    (status === "pending" || status === "approved")
-  );
-});
+    return (
+      rowUserId === userId &&
+      rowDate === date &&
+      (status === "pending" || status === "approved")
+    );
+  });
 }
 
 async function getLeaveBalance(userId) {
@@ -499,13 +544,14 @@ async function getLeaveBalance(userId) {
   rows.forEach(row => {
     const rowUserId = row[1];
     const type = row[3];
-let duration = 1;
+    let duration = 1;
 
-if (String(row[5]).includes("ครึ่ง")) {
-  duration = 0.5;
-} else {
-  duration = parseInt(row[5]) || 1;
-}
+    if (String(row[5]).includes("ครึ่ง")) {
+      duration = 0.5;
+    } else {
+      duration = parseInt(row[5], 10) || 1;
+    }
+
     const status = row[7];
 
     if (
@@ -529,6 +575,7 @@ if (String(row[5]).includes("ครึ่ง")) {
 
   return balance;
 }
+
 app.listen(PORT, () => {
   console.log(`LINE HR BOT START PORT ${PORT}`);
 });
