@@ -149,9 +149,9 @@ await replyText(
 );
   continue;
 }
+}       
 await replyFlex(event.replyToken, createLeaveFlex(text, leaveId, balance));
 }
-});
 function createLeaveFlex(text, leaveId, balance) {
 const name = getField(text, "ชื่อ");
 const type = getField(text, "ประเภท");
