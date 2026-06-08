@@ -150,7 +150,6 @@ await replyText(
   continue;
 }
 await replyFlex(event.replyToken, createLeaveFlex(text, leaveId, balance));
-}
 });
 
 function createLeaveFlex(text, leaveId, balance) {
