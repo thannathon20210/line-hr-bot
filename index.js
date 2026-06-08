@@ -90,7 +90,20 @@ const name = leave.name;
 
       if (event.type === "message" && event.message.type === "text") {
         const text = event.message.text.trim();
+if (text === "สิทธิลา") {
+  const balance = await getLeaveBalance(event.source.userId);
 
+ await replyText(
+  event.replyToken,
+  `สิทธิวันลาคงเหลือ\n\n` +
+  `ลาป่วย: ${balance["ลาป่วย"].remaining} วัน\n` +
+  `ลากิจ: ${balance["ลากิจ"].remaining} วัน\n` +
+  `ลาพักร้อน: ${balance["ลาพักร้อน"].remaining} วัน\n` +
+  `ลาบวช: ${balance["ลาบวช"].remaining} วัน`
+);
+
+continue;
+}
         if (text.startsWith("แจ้งลา")) {
 const name = getField(text, "ชื่อ");
 const type = getField(text, "ประเภท");
