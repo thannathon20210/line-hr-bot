@@ -149,7 +149,7 @@ else if (text === "สิทธิลา") {
     `ลากิจ: ${balance["ลากิจ"].remaining} วัน\n` +
     `ลาพักร้อน: ${balance["ลาพักร้อน"].remaining} วัน\n` +
     `ลาบวช: ${balance["ลาบวช"].remaining} วัน`
-  );​
+    );​
     } catch (err) {
       console.error("EVENT ERROR:", err.response?.data || err.message);
       if (err.message?.includes("ใบลานี้ถูกดำเนินการแล้ว")) {
