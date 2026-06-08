@@ -450,18 +450,19 @@ async function hasDuplicateLeave(userId, date) {
   const rows = result.data.values || [];
 
   return rows.some(row => {
-    const rowUserId = row[1];
-    const rowDate = row[4];
-    const status = row[7];
+  const rowUserId = row[1];
+  const rowDate = row[4];
+  const status = row[7];
 
-    return (
-      rowUserId === userId &&
-      rowDate === date &&
-      (status === "pending" || status === "approved")
-    );
-  });
+  return (
+    rowUserId === userId &&
+    rowDate === date &&
+    (status === "pending" || status === "approved")
+  );
+});
 }
- async function getLeaveBalance(userId) {
+
+async function getLeaveBalance(userId) {
   const auth = new google.auth.GoogleAuth({
     credentials: SERVICE_ACCOUNT,
     scopes: ["https://www.googleapis.com/auth/spreadsheets"]
