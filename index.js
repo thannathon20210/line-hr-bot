@@ -424,16 +424,22 @@ async function getLeaveById(leaveId) {
     throw new Error("Leave not found");
   }
 
-return {
-  leaveId: row[0],
-  userId: row[1],
-  name: row[2],
-  type: row[3],
-  date: row[4],
-  duration: row[5],
-  reason: row[6]
+  return {
+    leaveId: row[0],
+    userId: row[1],
+    displayName: row[2],
+    type: row[3],
+    date: row[4],
+    duration: row[5],
+    reason: row[6],
+    status: row[7],
+    approver: row[8],
+    createdAt: row[9]
+  };
 };
+
 }
+
 async function hasDuplicateLeave(userId, date) {
   const auth = new google.auth.GoogleAuth({
     credentials: SERVICE_ACCOUNT,
