@@ -24,6 +24,57 @@ app.get("/", (req, res) => {
   res.status(200).send("LINE HR BOT RUNNING");
 });
 
+app.get("/dashboard", async (req, res) => {
+  try {
+    const password = process.env.DASHBOARD_PASSWORD;
+
+    if (password && req.query.password !== password) {
+      return res.status(401).send(`
+        <!doctype html>
+        <html lang="th">
+        <head>
+          <meta charset="utf-8">
+          <meta name="viewport" content="width=device-width, initial-scale=1">
+          <title>HR Dashboard Login</title>
+          <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@picocss/pico@1/css/pico.min.css">
+        </head>
+        <body>
+          <main class="container">
+            <article>
+              <h2>HR Dashboard</h2>
+              <p>กรุณาใส่รหัสผ่านต่อท้าย URL แบบนี้</p>
+              <code>/dashboard?password=YOUR_PASSWORD</code>
+            </article>
+          </main>
+        </body>
+        </html>
+      `);
+    }
+
+    const data = await getDashboardData();
+    res.status(200).send(renderDashboardHtml(data));
+  } catch (error) {
+    console.error("Dashboard error:", error);
+    res.status(500).send("Dashboard error: " + escapeHtml(error.message));
+  }
+});
+
+app.get("/dashboard.json", async (req, res) => {
+  try {
+    const password = process.env.DASHBOARD_PASSWORD;
+
+    if (password && req.query.password !== password) {
+      return res.status(401).json({ error: "Unauthorized" });
+    }
+
+    const data = await getDashboardData();
+    res.status(200).json(data);
+  } catch (error) {
+    console.error("Dashboard JSON error:", error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
 app.post("/webhook", async (req, res) => {
   res.sendStatus(200);
 
@@ -797,6 +848,495 @@ async function getLeaveBalance(userId) {
   });
 
   return balance;
+}
+
+
+function parseDurationDays(value) {
+  const text = String(value || "").trim();
+
+  if (!text) return 1;
+  if (text.includes("ครึ่ง")) return 0.5;
+
+  const match = text.match(/(\d+(?:\.\d+)?)/);
+  if (match) return Number(match[1]);
+
+  return 1;
+}
+
+async function getSheetRows() {
+  const auth = new google.auth.GoogleAuth({
+    credentials: SERVICE_ACCOUNT,
+    scopes: ["https://www.googleapis.com/auth/spreadsheets"]
+  });
+
+  const sheets = google.sheets({ version: "v4", auth });
+
+  const result = await sheets.spreadsheets.values.get({
+    spreadsheetId: SHEET_ID,
+    range: "A:J"
+  });
+
+  return result.data.values || [];
+}
+
+async function getDashboardData() {
+  const rows = await getSheetRows();
+
+  const quota = {
+    "ลาป่วย": 30,
+    "ลากิจ": 6,
+    "ลาพักร้อน": 10,
+    "ลาบวช": 15
+  };
+
+  const peopleMap = {};
+  const totalsByType = {};
+  const pending = [];
+  const recent = [];
+
+  Object.keys(quota).forEach(type => {
+    totalsByType[type] = 0;
+  });
+
+  rows.forEach(row => {
+    const leaveId = row[0] || "";
+    const userId = row[1] || "";
+    const name = row[2] || "ไม่ระบุชื่อ";
+    const type = row[3] || "ไม่ระบุประเภท";
+    const date = row[4] || "";
+    const durationText = row[5] || "";
+    const reason = row[6] || "";
+    const status = row[7] || "";
+    const approver = row[8] || "";
+    const createdAt = row[9] || "";
+    const days = parseDurationDays(durationText);
+
+    if (!peopleMap[userId]) {
+      peopleMap[userId] = {
+        userId,
+        name,
+        totalApprovedDays: 0,
+        pendingCount: 0,
+        rejectedCount: 0,
+        requestInfoCount: 0,
+        byType: {}
+      };
+
+      Object.keys(quota).forEach(qType => {
+        peopleMap[userId].byType[qType] = {
+          quota: quota[qType],
+          used: 0,
+          remaining: quota[qType]
+        };
+      });
+    }
+
+    if (!peopleMap[userId].byType[type]) {
+      peopleMap[userId].byType[type] = {
+        quota: quota[type] || 0,
+        used: 0,
+        remaining: quota[type] || 0
+      };
+    }
+
+    if (status === "approved") {
+      peopleMap[userId].totalApprovedDays += days;
+      peopleMap[userId].byType[type].used += days;
+      peopleMap[userId].byType[type].remaining =
+        peopleMap[userId].byType[type].quota - peopleMap[userId].byType[type].used;
+
+      if (totalsByType[type] === undefined) totalsByType[type] = 0;
+      totalsByType[type] += days;
+    } else if (status === "pending") {
+      peopleMap[userId].pendingCount += 1;
+      pending.push({ leaveId, userId, name, type, date, duration: durationText, days, reason, status, createdAt });
+    } else if (status === "rejected") {
+      peopleMap[userId].rejectedCount += 1;
+    } else if (status === "request_info") {
+      peopleMap[userId].requestInfoCount += 1;
+    }
+
+    if (leaveId) {
+      recent.push({ leaveId, userId, name, type, date, duration: durationText, days, reason, status, approver, createdAt });
+    }
+  });
+
+  const people = Object.values(peopleMap)
+    .sort((a, b) => b.totalApprovedDays - a.totalApprovedDays || a.name.localeCompare(b.name, "th"));
+
+  const approvedTotalDays = people.reduce((sum, person) => sum + person.totalApprovedDays, 0);
+
+  recent.sort((a, b) => String(b.createdAt).localeCompare(String(a.createdAt)));
+
+  return {
+    generatedAt: new Date().toISOString(),
+    summary: {
+      peopleCount: people.length,
+      approvedTotalDays,
+      pendingCount: pending.length,
+      totalRequests: recent.length
+    },
+    totalsByType,
+    people,
+    pending,
+    recent: recent.slice(0, 30)
+  };
+}
+
+function formatDays(value) {
+  const number = Number(value || 0);
+  return Number.isInteger(number) ? String(number) : String(number.toFixed(1));
+}
+
+function statusLabel(status) {
+  const map = {
+    approved: "อนุมัติแล้ว",
+    pending: "รออนุมัติ",
+    rejected: "ปฏิเสธ",
+    request_info: "ขอข้อมูลเพิ่ม"
+  };
+
+  return map[status] || status || "-";
+}
+
+function statusClass(status) {
+  const map = {
+    approved: "success",
+    pending: "warning",
+    rejected: "danger",
+    request_info: "info"
+  };
+
+  return map[status] || "muted";
+}
+
+function escapeHtml(value) {
+  return String(value ?? "")
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&#039;");
+}
+
+function renderDashboardHtml(data) {
+  const peopleRows = data.people.map(person => {
+    const sick = person.byType["ลาป่วย"] || { used: 0, remaining: 30 };
+    const personal = person.byType["ลากิจ"] || { used: 0, remaining: 6 };
+    const vacation = person.byType["ลาพักร้อน"] || { used: 0, remaining: 10 };
+    const ordain = person.byType["ลาบวช"] || { used: 0, remaining: 15 };
+
+    return `
+      <tr>
+        <td>
+          <strong>${escapeHtml(person.name)}</strong>
+          <br><small>${escapeHtml(person.userId)}</small>
+        </td>
+        <td><strong>${formatDays(person.totalApprovedDays)}</strong></td>
+        <td>${formatDays(sick.used)} / เหลือ ${formatDays(sick.remaining)}</td>
+        <td>${formatDays(personal.used)} / เหลือ ${formatDays(personal.remaining)}</td>
+        <td>${formatDays(vacation.used)} / เหลือ ${formatDays(vacation.remaining)}</td>
+        <td>${formatDays(ordain.used)} / เหลือ ${formatDays(ordain.remaining)}</td>
+        <td>${person.pendingCount}</td>
+      </tr>
+    `;
+  }).join("");
+
+  const pendingRows = data.pending.map(item => `
+    <tr>
+      <td>${escapeHtml(item.name)}</td>
+      <td>${escapeHtml(item.type)}</td>
+      <td>${escapeHtml(item.date)}</td>
+      <td>${escapeHtml(item.duration)}</td>
+      <td>${escapeHtml(item.reason)}</td>
+    </tr>
+  `).join("");
+
+  const recentRows = data.recent.map(item => `
+    <tr>
+      <td>${escapeHtml(item.name)}</td>
+      <td>${escapeHtml(item.type)}</td>
+      <td>${escapeHtml(item.date)}</td>
+      <td>${escapeHtml(item.duration)}</td>
+      <td><span class="badge ${statusClass(item.status)}">${statusLabel(item.status)}</span></td>
+    </tr>
+  `).join("");
+
+  const typeCards = Object.entries(data.totalsByType).map(([type, days]) => `
+    <article class="stat-card">
+      <small>${escapeHtml(type)}</small>
+      <h3>${formatDays(days)} วัน</h3>
+    </article>
+  `).join("");
+
+  return `<!doctype html>
+<html lang="th">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>HR Sooksabay Dashboard</title>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@picocss/pico@1/css/pico.min.css">
+  <style>
+    :root {
+      --primary: #0B73D9;
+      --primary-hover: #075BB0;
+      --primary-focus: rgba(11, 115, 217, .25);
+      --font-size: 16px;
+    }
+
+    body {
+      background:
+        radial-gradient(circle at top left, rgba(42, 160, 255, .20), transparent 32rem),
+        linear-gradient(180deg, #F3F9FF 0%, #FFFFFF 100%);
+      color: #10243f;
+    }
+
+    nav {
+      padding-top: 1rem;
+      padding-bottom: 1rem;
+    }
+
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: .75rem;
+      font-weight: 800;
+      color: #0B2B5B;
+    }
+
+    .brand-icon {
+      width: 42px;
+      height: 42px;
+      border-radius: 50%;
+      display: grid;
+      place-items: center;
+      background: linear-gradient(135deg, #0B73D9, #51C7F4);
+      color: white;
+      box-shadow: 0 10px 25px rgba(11, 115, 217, .25);
+    }
+
+    .hero {
+      border: 0;
+      color: white;
+      background: linear-gradient(135deg, #0B73D9, #064EBD);
+      box-shadow: 0 20px 45px rgba(11, 115, 217, .22);
+      border-radius: 28px;
+      overflow: hidden;
+      position: relative;
+    }
+
+    .hero::after {
+      content: "";
+      position: absolute;
+      width: 320px;
+      height: 320px;
+      border-radius: 50%;
+      right: -90px;
+      top: -130px;
+      background: rgba(255,255,255,.16);
+    }
+
+    .hero h1, .hero p {
+      color: white;
+      position: relative;
+      z-index: 1;
+    }
+
+    .stats-grid {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 1rem;
+      margin: 1.25rem 0;
+    }
+
+    .stat-card {
+      border: 0;
+      border-radius: 22px;
+      background: rgba(255,255,255,.88);
+      box-shadow: 0 14px 35px rgba(17, 67, 119, .10);
+      margin: 0;
+    }
+
+    .stat-card h2, .stat-card h3 {
+      color: #0B2B5B;
+      margin-bottom: 0;
+    }
+
+    .table-card {
+      border: 0;
+      border-radius: 22px;
+      background: rgba(255,255,255,.92);
+      box-shadow: 0 14px 35px rgba(17, 67, 119, .10);
+      overflow: hidden;
+    }
+
+    .table-wrap {
+      overflow-x: auto;
+    }
+
+    table {
+      min-width: 900px;
+    }
+
+    th {
+      color: #0B73D9;
+      white-space: nowrap;
+    }
+
+    td {
+      vertical-align: middle;
+    }
+
+    .badge {
+      display: inline-block;
+      padding: .25rem .65rem;
+      border-radius: 999px;
+      font-size: .85rem;
+      font-weight: 700;
+      white-space: nowrap;
+    }
+
+    .success { color: #087A3D; background: #E6F7ED; }
+    .warning { color: #9A6700; background: #FFF4D6; }
+    .danger { color: #B42318; background: #FFE8E6; }
+    .info { color: #075BB0; background: #E8F4FF; }
+    .muted { color: #5D6B7A; background: #EEF2F6; }
+
+    footer {
+      color: #6B7A90;
+      padding-bottom: 2rem;
+    }
+
+    @media (max-width: 900px) {
+      .stats-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+      }
+    }
+
+    @media (max-width: 560px) {
+      .stats-grid {
+        grid-template-columns: 1fr;
+      }
+
+      .hero {
+        border-radius: 20px;
+      }
+    }
+  </style>
+</head>
+<body>
+  <nav class="container-fluid">
+    <ul>
+      <li>
+        <span class="brand">
+          <span class="brand-icon">S</span>
+          HR Sooksabay
+        </span>
+      </li>
+    </ul>
+    <ul>
+      <li><a href="/dashboard">Dashboard</a></li>
+      <li><a href="/dashboard.json" role="button">JSON</a></li>
+    </ul>
+  </nav>
+
+  <main class="container">
+    <article class="hero">
+      <h1>แดชบอร์ดสรุปวันลา</h1>
+      <p>ดูภาพรวมว่าแต่ละคนลาไปกี่วันแล้ว แยกตามประเภทวันลา และรายการที่ยังรออนุมัติ</p>
+    </article>
+
+    <section class="stats-grid">
+      <article class="stat-card">
+        <small>พนักงานทั้งหมด</small>
+        <h2>${data.summary.peopleCount} คน</h2>
+      </article>
+      <article class="stat-card">
+        <small>วันลาที่อนุมัติแล้ว</small>
+        <h2>${formatDays(data.summary.approvedTotalDays)} วัน</h2>
+      </article>
+      <article class="stat-card">
+        <small>รออนุมัติ</small>
+        <h2>${data.summary.pendingCount} รายการ</h2>
+      </article>
+      <article class="stat-card">
+        <small>คำขอทั้งหมด</small>
+        <h2>${data.summary.totalRequests} รายการ</h2>
+      </article>
+    </section>
+
+    <section class="stats-grid">
+      ${typeCards}
+    </section>
+
+    <article class="table-card">
+      <h2>สรุปตามพนักงาน</h2>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>ชื่อ</th>
+              <th>รวมลาแล้ว</th>
+              <th>ลาป่วย</th>
+              <th>ลากิจ</th>
+              <th>ลาพักร้อน</th>
+              <th>ลาบวช</th>
+              <th>รออนุมัติ</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${peopleRows || `<tr><td colspan="7">ยังไม่มีข้อมูล</td></tr>`}
+          </tbody>
+        </table>
+      </div>
+    </article>
+
+    <article class="table-card">
+      <h2>รายการรออนุมัติ</h2>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>ชื่อ</th>
+              <th>ประเภท</th>
+              <th>วันที่</th>
+              <th>ระยะเวลา</th>
+              <th>เหตุผล</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${pendingRows || `<tr><td colspan="5">ไม่มีรายการรออนุมัติ</td></tr>`}
+          </tbody>
+        </table>
+      </div>
+    </article>
+
+    <article class="table-card">
+      <h2>รายการล่าสุด</h2>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>ชื่อ</th>
+              <th>ประเภท</th>
+              <th>วันที่</th>
+              <th>ระยะเวลา</th>
+              <th>สถานะ</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${recentRows || `<tr><td colspan="5">ยังไม่มีข้อมูล</td></tr>`}
+          </tbody>
+        </table>
+      </div>
+    </article>
+  </main>
+
+  <footer class="container">
+    <small>Generated at ${escapeHtml(data.generatedAt)} • HR Sooksabay Dashboard</small>
+  </footer>
+</body>
+</html>`;
 }
 
 app.listen(PORT, () => {
