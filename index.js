@@ -16,6 +16,10 @@ app.use(express.json());
 const TOKEN = process.env.LINE_CHANNEL_ACCESS_TOKEN;
 const PORT = process.env.PORT || 3000;
 
+// ใส่ลิงก์โลโก้บริษัทแบบ https ใน Render > Environment เช่น LOGO_URL=https://...
+// ถ้าไม่ใส่ ระบบจะใช้ตัวอักษร S แทนโลโก้ เพื่อให้ Flex Message ไม่พัง
+const LOGO_URL = process.env.LOGO_URL || "";
+
 app.get("/", (req, res) => {
   res.status(200).send("LINE HR BOT RUNNING");
 });
@@ -34,7 +38,7 @@ app.post("/webhook", async (req, res) => {
           console.log("APPROVE:", leaveId);
 
           const leave = await getLeaveById(leaveId);
-          const name = leave.name || leave.displayName || "-";
+          const name = leave.name;
 
           await updateLeaveStatus(
             leaveId,
@@ -43,7 +47,7 @@ app.post("/webhook", async (req, res) => {
           );
 
           const balance = await getLeaveBalance(leave.userId);
-          const remaining = balance[leave.type]?.remaining ?? 0;
+          const remaining = balance[leave.type]?.remaining ?? "-";
 
           console.log("APPROVED SUCCESS");
 
@@ -59,7 +63,7 @@ app.post("/webhook", async (req, res) => {
           console.log("REQUEST INFO:", leaveId);
 
           const leave = await getLeaveById(leaveId);
-          const name = leave.name || leave.displayName || "-";
+          const name = leave.name;
 
           await updateLeaveStatus(
             leaveId,
@@ -79,7 +83,7 @@ app.post("/webhook", async (req, res) => {
           console.log("REJECT:", leaveId);
 
           const leave = await getLeaveById(leaveId);
-          const name = leave.name || leave.displayName || "-";
+          const name = leave.name;
 
           await updateLeaveStatus(
             leaveId,
@@ -125,21 +129,10 @@ app.post("/webhook", async (req, res) => {
           const duration = getField(text, "เวลา");
           const reason = getField(text, "เหตุผล");
 
-          const balance = await getLeaveBalance(event.source.userId);
-          const remaining = balance[type]?.remaining || 0;
-
-          let requestedDays = 1;
-
-          if (String(duration).includes("ครึ่ง")) {
-            requestedDays = 0.5;
-          } else {
-            requestedDays = parseInt(duration, 10) || 1;
-          }
-
-          if (requestedDays > remaining) {
+          if (!name || name === "-" || !type || type === "-" || !date || date === "-") {
             await replyText(
               event.replyToken,
-              `สิทธิ์ลาไม่เพียงพอ\nเหลือ ${remaining} วัน`
+              "กรุณากรอกข้อมูลให้ครบ เช่น\n\nแจ้งลา\nชื่อ: ทดสอบ\nประเภท: ลาป่วย\nวันที่: 2026-06-12\nเวลา: 1 วัน\nเหตุผล: ไม่สบาย"
             );
             continue;
           }
@@ -157,6 +150,25 @@ app.post("/webhook", async (req, res) => {
             continue;
           }
 
+          const balance = await getLeaveBalance(event.source.userId);
+          const remaining = balance[type]?.remaining || 0;
+
+          let requestedDays = 1;
+
+          if (String(duration).includes("ครึ่ง")) {
+            requestedDays = 0.5;
+          } else {
+            requestedDays = parseFloat(String(duration).replace(/[^\d.]/g, "")) || 1;
+          }
+
+          if (requestedDays > remaining) {
+            await replyText(
+              event.replyToken,
+              `สิทธิ์ลาไม่เพียงพอ\nเหลือ ${remaining} วัน`
+            );
+            continue;
+          }
+
           const leaveId = await saveLeaveToSheet({
             userId: event.source.userId,
             name,
@@ -166,22 +178,17 @@ app.post("/webhook", async (req, res) => {
             reason
           });
 
-          await replyFlex(
-            event.replyToken,
-            createLeaveFlex(text, leaveId, balance)
-          );
-
+          await replyFlex(event.replyToken, createLeaveFlex(text, leaveId, balance));
           continue;
         }
       }
     } catch (error) {
       console.error("Event handling error:", error);
-
       if (event.replyToken) {
         try {
           await replyText(
             event.replyToken,
-            "เกิดข้อผิดพลาดในการประมวลผล กรุณาลองใหม่อีกครั้ง"
+            "ระบบขัดข้องชั่วคราว กรุณาลองใหม่อีกครั้ง"
           );
         } catch (replyError) {
           console.error("Reply error:", replyError);
@@ -205,63 +212,223 @@ function createLeaveFlex(text, leaveId, balance) {
     "ลาบวช": 15
   };
 
+  const logoBox = LOGO_URL
+    ? {
+        type: "image",
+        url: LOGO_URL,
+        size: "sm",
+        aspectMode: "cover",
+        aspectRatio: "1:1",
+        flex: 1
+      }
+    : {
+        type: "box",
+        layout: "vertical",
+        width: "44px",
+        height: "44px",
+        cornerRadius: "22px",
+        backgroundColor: "#FFFFFF",
+        justifyContent: "center",
+        alignItems: "center",
+        contents: [
+          {
+            type: "text",
+            text: "S",
+            color: "#0B73D9",
+            weight: "bold",
+            size: "xl",
+            align: "center"
+          }
+        ]
+      };
+
   return {
     type: "flex",
     altText: "ใบลาใหม่รออนุมัติ",
     contents: {
       type: "bubble",
       size: "mega",
+      styles: {
+        header: {
+          backgroundColor: "#0B73D9"
+        },
+        body: {
+          backgroundColor: "#F4FAFF"
+        },
+        footer: {
+          backgroundColor: "#F4FAFF"
+        }
+      },
+      header: {
+        type: "box",
+        layout: "vertical",
+        paddingAll: "20px",
+        contents: [
+          {
+            type: "box",
+            layout: "horizontal",
+            spacing: "md",
+            contents: [
+              logoBox,
+              {
+                type: "box",
+                layout: "vertical",
+                flex: 4,
+                contents: [
+                  {
+                    type: "text",
+                    text: "HR Sooksabay",
+                    color: "#FFFFFF",
+                    weight: "bold",
+                    size: "lg"
+                  },
+                  {
+                    type: "text",
+                    text: "ระบบจัดการใบลาออนไลน์",
+                    color: "#E8F4FF",
+                    size: "sm"
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      },
       body: {
         type: "box",
         layout: "vertical",
+        paddingAll: "20px",
         spacing: "md",
         contents: [
           {
-            type: "text",
-            text: "📝 ใบลาใหม่รออนุมัติ",
-            weight: "bold",
-            size: "xl",
-            wrap: true
-          },
-          {
-            type: "text",
-            text: "(L1/1)",
-            color: "#888888"
-          },
-          { type: "separator" },
-          {
-            type: "text",
-            text: name,
-            weight: "bold"
-          },
-          {
-            type: "text",
-            text: "Management · Owner",
-            color: "#666666",
-            size: "sm"
-          },
-          { type: "separator" },
-          row("วันที่", date),
-          row("ประเภท", type),
-          row("ระยะเวลา", duration),
-          row("เหตุผล", reason),
-          { type: "separator" },
-          {
-            type: "text",
-            text: "สิทธิ์วันลา",
-            weight: "bold",
-            color: "#666666"
-          },
-          row("ลาป่วย", `เหลือ ${balance["ลาป่วย"].remaining} วัน/ปี`),
-          row("ลากิจ", `เหลือ ${balance["ลากิจ"].remaining} วัน/ปี`),
-          row("ลาพักร้อน", `เหลือ ${balance["ลาพักร้อน"].remaining} วัน/ปี`),
-          row("ลาบวช", `เหลือ ${balance["ลาบวช"].remaining} วัน/ปี`),
-          { type: "separator" },
-          {
-            type: "text",
-            text: `สิทธิ์ ${type}: ${quota[type] || "-"} วัน/ปี`,
-            wrap: true,
-            weight: "bold"
+            type: "box",
+            layout: "vertical",
+            backgroundColor: "#FFFFFF",
+            cornerRadius: "20px",
+            paddingAll: "18px",
+            spacing: "md",
+            contents: [
+              {
+                type: "box",
+                layout: "horizontal",
+                spacing: "md",
+                contents: [
+                  {
+                    type: "box",
+                    layout: "vertical",
+                    width: "48px",
+                    height: "48px",
+                    cornerRadius: "24px",
+                    backgroundColor: "#E7F2FF",
+                    justifyContent: "center",
+                    alignItems: "center",
+                    contents: [
+                      {
+                        type: "text",
+                        text: "📝",
+                        size: "xl",
+                        align: "center"
+                      }
+                    ]
+                  },
+                  {
+                    type: "box",
+                    layout: "vertical",
+                    flex: 1,
+                    contents: [
+                      {
+                        type: "text",
+                        text: "ใบลาใหม่รออนุมัติ",
+                        weight: "bold",
+                        size: "xl",
+                        color: "#0B2B5B",
+                        wrap: true
+                      },
+                      {
+                        type: "text",
+                        text: `(L1/1) • ${type}`,
+                        color: "#6B7A90",
+                        size: "sm"
+                      }
+                    ]
+                  }
+                ]
+              },
+              {
+                type: "separator",
+                color: "#DDEBFA"
+              },
+              {
+                type: "box",
+                layout: "vertical",
+                backgroundColor: "#F2F8FF",
+                cornerRadius: "14px",
+                paddingAll: "14px",
+                spacing: "xs",
+                contents: [
+                  {
+                    type: "text",
+                    text: name,
+                    weight: "bold",
+                    size: "lg",
+                    color: "#0B2B5B"
+                  },
+                  {
+                    type: "text",
+                    text: "Management · Owner",
+                    color: "#6B7A90",
+                    size: "sm"
+                  }
+                ]
+              },
+              rowStyled("วันที่", date),
+              rowStyled("ประเภท", type),
+              rowStyled("ระยะเวลา", duration),
+              rowStyled("เหตุผล", reason),
+              {
+                type: "separator",
+                color: "#DDEBFA"
+              },
+              {
+                type: "text",
+                text: "สิทธิ์วันลา",
+                weight: "bold",
+                color: "#0B73D9",
+                size: "md"
+              },
+              {
+                type: "box",
+                layout: "vertical",
+                backgroundColor: "#F2F8FF",
+                cornerRadius: "14px",
+                paddingAll: "14px",
+                spacing: "sm",
+                contents: [
+                  leaveBalanceRow("🏥 ลาป่วย", balance["ลาป่วย"].remaining),
+                  leaveBalanceRow("📌 ลากิจ", balance["ลากิจ"].remaining),
+                  leaveBalanceRow("🌤 ลาพักร้อน", balance["ลาพักร้อน"].remaining),
+                  leaveBalanceRow("🙏 ลาบวช", balance["ลาบวช"].remaining)
+                ]
+              },
+              {
+                type: "box",
+                layout: "vertical",
+                backgroundColor: "#E8F4FF",
+                cornerRadius: "14px",
+                paddingAll: "14px",
+                contents: [
+                  {
+                    type: "text",
+                    text: `สิทธิ์ ${type}: ${quota[type] || "-"} วัน/ปี`,
+                    wrap: true,
+                    weight: "bold",
+                    size: "md",
+                    color: "#0B2B5B",
+                    align: "center"
+                  }
+                ]
+              }
+            ]
           }
         ]
       },
@@ -269,10 +436,11 @@ function createLeaveFlex(text, leaveId, balance) {
         type: "box",
         layout: "vertical",
         spacing: "sm",
+        paddingAll: "18px",
         contents: [
-          postbackBtn("✅ อนุมัติ", "#0b5d32", `approve|${leaveId}`),
-          postbackBtn("❌ ปฏิเสธ", "#d9dde6", `reject|${leaveId}`, "secondary"),
-          postbackBtn("ℹ️ ขอข้อมูลเพิ่ม", "#d9dde6", `request_info|${leaveId}`, "secondary")
+          postbackBtn("✅ อนุมัติ", "#087A3D", `approve|${leaveId}`),
+          postbackBtn("❌ ปฏิเสธ", "#FFFFFF", `reject|${leaveId}`, "secondary"),
+          postbackBtn("ℹ️ ขอข้อมูลเพิ่ม", "#FFFFFF", `request_info|${leaveId}`, "secondary")
         ]
       }
     }
@@ -310,10 +478,64 @@ function row(label, value) {
   };
 }
 
+function rowStyled(label, value) {
+  return {
+    type: "box",
+    layout: "horizontal",
+    spacing: "md",
+    paddingTop: "4px",
+    paddingBottom: "4px",
+    contents: [
+      {
+        type: "text",
+        text: label,
+        color: "#7A8AA0",
+        size: "sm",
+        flex: 3
+      },
+      {
+        type: "text",
+        text: String(value),
+        color: "#1F2D3D",
+        size: "sm",
+        weight: "bold",
+        wrap: true,
+        flex: 5
+      }
+    ]
+  };
+}
+
+function leaveBalanceRow(label, remaining) {
+  return {
+    type: "box",
+    layout: "horizontal",
+    contents: [
+      {
+        type: "text",
+        text: label,
+        size: "sm",
+        color: "#1F2D3D",
+        flex: 4
+      },
+      {
+        type: "text",
+        text: `เหลือ ${remaining} วัน/ปี`,
+        size: "sm",
+        color: "#0B73D9",
+        weight: "bold",
+        align: "end",
+        flex: 4
+      }
+    ]
+  };
+}
+
 function btn(label, color, text, style = "primary") {
   const button = {
     type: "button",
     style,
+    height: "md",
     action: {
       type: "message",
       label,
@@ -332,6 +554,7 @@ function postbackBtn(label, color, data, style = "primary") {
   const button = {
     type: "button",
     style,
+    height: "md",
     action: {
       type: "postback",
       label,
@@ -544,15 +767,15 @@ async function getLeaveBalance(userId) {
   rows.forEach(row => {
     const rowUserId = row[1];
     const type = row[3];
+    const status = row[7];
+
     let duration = 1;
 
     if (String(row[5]).includes("ครึ่ง")) {
       duration = 0.5;
     } else {
-      duration = parseInt(row[5], 10) || 1;
+      duration = parseFloat(String(row[5]).replace(/[^\d.]/g, "")) || 1;
     }
-
-    const status = row[7];
 
     if (
       rowUserId === userId &&
