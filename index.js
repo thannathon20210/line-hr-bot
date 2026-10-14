@@ -78,10 +78,21 @@ app.get("/dashboard.json", async (req, res) => {
 app.post("/webhook", async (req, res) => {
   res.sendStatus(200);
 
-  const events = req.body.events || [];
+  const events = Array.isArray(req.body?.events) ? req.body.events : [];
 
   for (const event of events) {
     try {
+      // Log only the group identifier and event type; never log chat text or tokens.
+      // Render > Logs: search for LINE_GROUP_ID after sending a message in the group.
+      const source = event?.source;
+      if (
+        source?.type === "group" &&
+        typeof source.groupId === "string" &&
+        /^C[a-fA-F0-9]{32}$/.test(source.groupId)
+      ) {
+        console.log("LINE_GROUP_ID:", source.groupId, "EVENT:", event.type);
+      }
+
       if (event.type === "postback") {
         const [action, leaveId] = event.postback.data.split("|");
 
