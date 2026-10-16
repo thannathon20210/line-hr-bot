@@ -169,6 +169,32 @@ app.post("/webhook", async (req, res) => {
       if (event.type === "message" && event.message.type === "text") {
         const text = event.message.text.trim();
 
+        // The account that sends this command is the only mention target.
+        // Have the intended approver send it from their own LINE account.
+        if (text === "ทดสอบแท็กตัวเอง") {
+          const source = event.source || {};
+          if (source.type !== "group" || !/^U[a-fA-F0-9]{32}$/.test(source.userId || "")) {
+            await replyText(event.replyToken, "กรุณาพิมพ์คำสั่งนี้จากบัญชีของคุณในกลุ่ม LINE ที่มีบอตอยู่");
+            continue;
+          }
+          await axios.post(
+            "https://api.line.me/v2/bot/message/reply",
+            {
+              replyToken: event.replyToken,
+              messages: [{
+                type: "textV2",
+                text: "✅ ทดสอบแท็ก {sender}\nบัญชีที่พิมพ์คำสั่งนี้",
+                substitution: {
+                  sender: { type: "mention", mentionee: { type: "user", userId: source.userId } }
+                }
+              }]
+            },
+            { headers: { "Content-Type": "application/json", Authorization: `Bearer ${TOKEN}` } }
+          );
+          console.log("LINE_MENTION_SELF:", source.groupId, "LINE_USER_ID:", source.userId);
+          continue;
+        }
+
         if (text === "สิทธิลา") {
           const balance = await getLeaveBalance(event.source.userId);
 
